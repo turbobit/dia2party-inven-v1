@@ -7,14 +7,20 @@ var app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(express.static(__dirname + '/views'));
-const PouchDB = require('pouchdb');
-PouchDB.plugin(require('pouchdb-find'));
-PouchDB.plugin(require('pouchdb-upsert'));
-PouchDB.plugin(require('pouchdb-quick-search-korean'));
-
-var lists = new PouchDB('db/Lists');
 var striptags = require('striptags');
+require('dotenv').config();
 
+// configs 변수
+const configs = {
+    DB_HOST: process.env.DB_HOST || 'localhost',
+    DB_PORT: process.env.DB_PORT || 3306,
+    DB_USER: process.env.DB_USER || 'root',
+    DB_PASS: process.env.DB_PASS || 'admin',
+    connectTimeout: Number(process.env.CONNECT_TIMEOUT || 1000)
+}
+
+var mysql = require('mysql2/promise');
+var conn, totalCnt;
 
 app.use(function (req, res, next) {
     //console.log('Time:', Date.now());
@@ -50,52 +56,44 @@ app.post('/getAll', async function (req, res) {
     let page = (offset / rows_per_page);// + 1; // == 1
     let skip = page * rows_per_page; // == 10 for the first page, 10 for the second ...
 
-    let info = await lists.info();
-    let bulks;
-    //console.log(info.doc_count); //전체 갯수
-    //console.log(search_value); //전체 갯수
+    const [rows] = await conn.execute('select count(*) as cnt from list');
+    totalCnt = rows[0].cnt;
+    //console.log("전체 저장된 갯수", totalCnt);
+
     if (search_value !== null) {
-        bulks = await lists.search(
-            {
-                query: search_value,
-                fields: ['title', 'content'],
-                skip: skip,
-                limit: rows_per_page,
-                //sort: [{ id: 'desc' }],
-                stale: 'ok',
-
-            }
-        );
-        console.log(bulks);
-        let bulkIds = []
-        for (let doc of bulks.rows) {
-            //console.log(doc.id);
-            bulkIds.push({
-                id: doc.id
-            });
+        let sql_where = [];
+        let sql_value = [];
+        const wheres = search_value.split(" ");
+        for (let where of wheres) {
+            sql_where.push(`
+                (
+                    title like ? or
+                    content like ? or
+                    name like ? 
+                )
+            `);
+            sql_value.push( "%"+where+"%");
+            sql_value.push( "%"+where+"%");
+            sql_value.push( "%"+where+"%");
         }
-        //console.log(bulkIds);
-        docs = await lists.bulkGet(
-            {
-                docs: bulkIds
-            }
-        );
+        //console.log(sql_value);
+        sql_value.push(skip);
+        sql_value.push(rows_per_page);
+        const sql = `
+            select * from list 
+            where ${sql_where.join(" or ")}
+            order by num desc limit ?,?        
+        `;
+        //console.log(sql);
+        const [docs, fields] = await conn.execute(sql, sql_value);
         //console.log(docs);
-
-        if (docs.results !== null) {
-
-            let dds = []
-            for (let dd of docs.results) {
-                //console.log(dd.docs[0].ok);
-                let doc = dd.docs[0].ok;
-                dds.push(doc);
-            }
-
+        //console.log(docs.length);
+        if (docs !== null) {
             ret = {
-                recordsTotal: bulks.total_rows,
+                recordsTotal: totalCnt,
                 //recordsFiltered: info.doc_count,
                 draw: draw,
-                data: dds
+                data: docs
             }
             result = JSON.stringify(ret);
             res.send(result);
@@ -106,21 +104,17 @@ app.post('/getAll', async function (req, res) {
             });
             return;
         }
+
     } else {
-        docs = await lists.find(
-            {
-                selector: {},
-                skip: skip,
-                limit: rows_per_page,
-                sort: [{ _id: 'desc' }]
-            }
-        );
+
+        const [docs, fields] = await conn.execute(`select * from list order by num desc limit ?,?`, [skip, rows_per_page]);
+        //console.log(docs.length);
         if (docs !== null) {
             ret = {
-                recordsTotal: info.doc_count,
+                recordsTotal: totalCnt,
                 //recordsFiltered: info.doc_count,
                 draw: draw,
-                data: docs.docs
+                data: docs
             }
             result = JSON.stringify(ret);
             res.send(result);
@@ -137,14 +131,16 @@ app.post('/getAll', async function (req, res) {
 app.listen(3000, () => {
     console.log('Server is up and running');
 });
-lists.createIndex({ index: { fields: ['num'] } });
 
 //* 주소 읽고 디비에 저장
 async function updateList(url) {
-    let tdlList = [];
+    const [rows, fields] = await conn.execute('select count(*) as cnt from list');
+    totalCnt = rows[0].cnt;
+    console.log("전체 저장된 갯수", totalCnt);
+
     const response = await axios.get(url);
     const $ = cheerio.load(response.data);
-    $('div.board-list table tbody tr').each((index, item) => {
+    $('div.board-list table tbody tr').each(async (index, item) => {
         let num = $(item).find('td.num span').text();
         let title1 = $(item).find('td.tit div.text-wrap div a');
         $(title1).children('span').remove().html(); //span제거 카테고리 제거 // 제목만 뽑기위해
@@ -152,43 +148,26 @@ async function updateList(url) {
         let href = $(item).find('td.tit div a').attr('href');
         let username = $(item).find('td.user span.layerNickName').text();
         let date = $(item).find('td.date').text();
+
         //세부 게시물 들어가서 링크 따오자
-        tdlList[index] = {
-            _id: num,
-            num: num,
-            title: title,
-            href: href,
-            username: username,
-            date: date,
-            touched: false
-        }
-        lists.putIfNotExists(tdlList[index]).then(function (res) {
-            // success, res is {rev: '1-xxx', updated: true, id: 'myDocId'}
-        }).catch(function (err) {
-            console.log(err);
-            // error//
-        });
+        sql = `insert into list ( num, date_str, title, name, href) values
+            ( ? , ? , ? , ? , ? ) ON DUPLICATE KEY UPDATE num = ? 
+        `;
+        //병렬 처리를위하 await 안씀
+        //await conn.execute(sql, [num, date, title, username, href, num]);
+        conn.execute(sql, [num, date, title, username, href, num]);
+
     });
 }
 
 async function updateContent(url) {
-    docs = await lists.find(
-        {
-            selector: {},
-            limit: 5,
-            sort: [{ _id: 'desc' }]
-        }
-    );
-    for (let doc of docs.docs) {
+    const [rows, fields] = await conn.execute('select * from list order by num desc limit 20');
+    for (let doc of rows) {
         //console.log(doc._id);
-
         //가장 최근거부터 세부 게시물정보가 있는지 확인하고 업데이트하자
         if (!doc.touched) {
             console.log('[update]', doc.href);
-            let response;
             try {
-                //response = await axios.get(encodeURI(doc.href));
-                //빠른 스캔을 위해 await 말고 then으로 처리 , 병렬처리로 빠름
                 axios.get(encodeURI(doc.href)).then(function (response) {
                     const $ = cheerio.load(response.data);
                     let title = $('.articleTitle').html();
@@ -202,36 +181,18 @@ async function updateContent(url) {
                     //console.log(title);
                     //console.log(articleDate);//작성일
                     //console.log(content);
-
-                    lists.upsert(doc._id, function (doc) {
-                        if (!doc.touched) {
-                            doc.touched = true;
-                            doc.content = content;
-                            doc.articleDate = articleDate;
-                            return doc;
-                        }
-                        return false; // don't update the doc; it's already been "touched"
-                    });
+                    //병렬 처리를위하 await 안씀
+                    //await conn.execute(sql, [num, date, title, username, href, num]);
+                    sql = `insert into list ( num ) values ( ? ) ON DUPLICATE KEY UPDATE touched = 1, date = ?, content = ?`;
+                    conn.execute(sql, [doc.num, articleDate, content]).catch(console.log);
                 }).catch(error => {
                     console.error(error);
-                    lists.upsert(doc._id, function (doc) {
-                        if (!doc.touched) {
-                            doc.touched = true;
-                            return doc;
-                        }
-                        return false; // don't update the doc; it's already been "touched"
-                    });
                 })
             } catch (err) {
                 //에러나면 터치하고 더이상 업데이트하지 않는다
                 //대부분 게시물을 삭제한경우
-                lists.upsert(doc._id, function (doc) {
-                    if (!doc.touched) {
-                        doc.touched = true;
-                        return doc;
-                    }
-                    return false; // don't update the doc; it's already been "touched"
-                });
+                sql = `insert into list ( num ) values ( ? ) ON DUPLICATE KEY UPDATE touched = 1`;
+                conn.execute(sql, [doc.num]).catch(console.log);
             }
         }
     }
@@ -248,32 +209,24 @@ async function updateAll() {
     //https://www.inven.co.kr/board/diablo2/5739?category=%EC%8A%A4%ED%83%A0&p=1
     //await updateList("https://www.closetoya.com/1.html");
     await updateList("https://www.inven.co.kr/board/diablo2/5739?category=%EC%8A%A4%ED%83%A0&p=1");
+
+    //업데이트는 기다릴필요 없으니 병렬
+    //await updateContent();
     await updateContent();
-    //    console.log('[updateContent][end]', Date.now());
+    console.log('[updateContent][end]', Date.now());
 }
 
 (async () => {//
-    //텍스트 서치를 위해 인덱스 생성
-    lists.search({
-        fields: ['title', 'content'],
-
-        build: true
-    }).then(function (info) {
-        // handle result
-        console.log(info);
-    }).catch(function (err) {
-        // handle error
-        console.log(err);
+    console.log(configs);
+    conn = await mysql.createConnection({
+        host: configs.DB_HOST,
+        user: configs.DB_USER,
+        password: configs.DB_PASS,
+        database: 'dia2party'
     });
-    let docs = await lists.find(
-        {
-            selector: {},
-            sort: [{ _id: 'desc' }]
-        }
-    );
-    console.log("전체 저장된 갯수", Object.keys(docs.docs).length);
-
-
+    const [rows, fields] = await conn.execute('select count(*) as cnt from list');
+    totalCnt = rows[0].cnt;
+    console.log("전체 저장된 갯수", totalCnt);
 
     //게시물 안에 들어가서 내용 추출
     await updateAll();
