@@ -28,9 +28,13 @@
             <div class="col-sm"><button class="col-sm bt-search-normal">노말</button></div>
             <div class="col-sm"><button class="col-sm bt-search-night">나이트</button></div>
             <div class="col-sm"><button class="col-sm bt-search-hell">헬</button></div>
+            <div class="col-sm"><button class="col-sm bt-search-cow">카우</button></div>
+            <div class="col-sm"><button class="col-sm bt-search-dia">디아</button></div>
             <div class="col-sm">조건은 Or 적용</div>
-            <div class="col-sm"></div>
-            <div class="col-sm"></div>
+        </div>
+        <div class="row">
+            <div class="col-sm"><input style="width:100%" type="text" id="mySearchText" placeholder="Search..."></div>
+            <div class="col-sm"><button style="width:50%" id="mySearchButton">Search</button></div>
         </div>
     </div>
     <div class="container-fluid">
@@ -59,7 +63,7 @@
             "bLengthChange": false,
             //"processing": true,
             "serverSide": true,
-            //"searching": false,
+            //"searching": true,
             "ajax": {
                 "data": "json",
                 "type": "POST",
@@ -83,17 +87,19 @@
                     { "data": "title" },
                     { "data": "content" },
                     { "data": "name" },
-                ]
+                ],
+            "dom": '<"top"i>rt<"bottom"><"clear">'
 
         });
-
-        ///$("input[type='search']").css('width:400px')
+        $('#mySearchButton').on('keyup click', function () {
+            table.search($('#mySearchText').val()).draw();
+        });
         setInterval(function () {
             table.ajax.reload(null, false); // user paging is not reset on reload
         }, 2000);
 
         function check_new_search_values(new_search_values, prev_search_value) {
-            const wheres = prev_search_value.split(" ");
+            const wheres = prev_search_value.trim().split(" ");
             for (let where of wheres) {
                 //기존거에 있으면 패스
                 let isThere = false;
@@ -107,15 +113,20 @@
                     new_search_values.push(where);
                 }
             }
-            new_search_value = new_search_values.join(" ");
+            new_search_value = new_search_values.join(" ").trim();
             console.log(new_search_value);
 
+            $('#mySearchText').val(new_search_value);
             table.search(new_search_value).draw();
-            //            $("input[type='search']").val(new_search_value);
+            //table.search(new_search_value).draw();
+            //$("input[type='search']").val(new_search_value);
         }
+        $(".bt-search-clear").click(function () {
+            $('#mySearchText').val('');
+            table.search('').draw();
+        });
         $(".bt-search-normal").click(function () {
-            prev_search_value = $("input[type='search']").val();
-            //console.log(  );
+            prev_search_value = $('#mySearchText').val()
             let new_search_values = [];
             new_search_values.push('노말');
             new_search_values.push('노멀');
@@ -124,24 +135,34 @@
             check_new_search_values(new_search_values, prev_search_value);
         });
         $(".bt-search-night").click(function () {
-            prev_search_value = $("input[type='search']").val();
-            //console.log(  );
+            prev_search_value = $('#mySearchText').val()
             let new_search_values = [];
             new_search_values.push('나이트');
             new_search_values.push('나메');
             check_new_search_values(new_search_values, prev_search_value);
         });
         $(".bt-search-hell").click(function () {
-            prev_search_value = $("input[type='search']").val();
-            //console.log(  );
+            prev_search_value = $('#mySearchText').val()
             let new_search_values = [];
             new_search_values.push('헬');
             new_search_values.push('hel');
             check_new_search_values(new_search_values, prev_search_value);
         });
-        $(".bt-search-clear").click(function () {
-            table.search('').draw();
+        $(".bt-search-cow").click(function () {
+            prev_search_value = $('#mySearchText').val()
+            let new_search_values = [];
+            new_search_values.push('카우');
+            new_search_values.push('cow');
+            check_new_search_values(new_search_values, prev_search_value);
         });
+        $(".bt-search-dia").click(function () {
+            prev_search_value = $('#mySearchText').val()
+            let new_search_values = [];
+            new_search_values.push('디아');
+            new_search_values.push('dia');
+            check_new_search_values(new_search_values, prev_search_value);
+        });
+
     });
 </script>
 

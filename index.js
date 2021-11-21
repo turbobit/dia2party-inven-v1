@@ -37,7 +37,7 @@ app.post('/getAll', async function (req, res) {
     let start = req.body.start; //페이징번호
     let length = req.body.length; //몇개씩
     let draw = req.body.draw;
-    let search_value = req.body["search[value]"] || null;
+    let search_value = req.body["search[value]"].trim() || null;
     let _isBreak = false;
     let docs = null;
     if (!isNumber(length) || !isNumber(start)) {
