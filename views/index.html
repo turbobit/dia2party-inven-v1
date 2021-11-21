@@ -1,0 +1,66 @@
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+    <script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.16/js/dataTables.bootstrap4.min.js"></script>
+    <style>
+        body {
+            padding-top: 50px;
+        }
+    </style>
+</head>
+
+<body class="bg-info">
+    <div class="container">
+        <div class="ListsAll">
+            <table id="ListsAll" class="table table-bordered table-sm">
+                <thead>
+                    <tr>
+                        <th>num</th>
+                        <th>date</th>
+                        <th>title</th>
+                        <th>content</th>
+                        <th>name</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</body>
+<script>
+    $.fn.dataTable.ext.errMode = 'none';
+    $(document).ready(function () {
+        var table = $('#ListsAll').DataTable({
+            "paging": true,
+            "pageLength": 10,
+            //"processing": true,
+            "serverSide": true,
+            //"searching": false,
+            "ajax": {
+                "data": "json",
+                "type": "POST",
+                "url": "/getAll"
+            },
+            "order": [[ 1, "desc" ]],
+            "columns":
+                [
+                    { "data": "num" },
+                    { "data": "date" },
+                    { "data": "title" },
+                    { "data": "content" },
+                    { "data": "username" }
+                ]
+
+        });
+
+        setInterval(function () {
+            table.ajax.reload(null, false); // user paging is not reset on reload
+        }, 2000);
+    });
+</script>
+
+</html>
