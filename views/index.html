@@ -86,7 +86,18 @@
                     },
                     { "data": "title" },
                     { "data": "content" },
-                    { "data": "name" },
+                    {
+                        "data": "name",
+                        "render": function (data, type, row, meta) {
+                            return '<span class="row_names" onclick="checkNameButton($(this).text())">' + data + '</span>';
+                            //console.log(data);
+                            //moment(row.updatedDate).format('DD/MM/YYYY hh:mm:ss');
+                            return moment(data).fromNow();
+                            //return type === 'display' && data.length > 40 ?
+                            //   '<span title="' + data + '">' + data.substr(0, 38) + '...</span>' :
+                            //    data;
+                        }
+                    },
                 ],
             "dom": '<"top"i>rt<"bottom"><"clear">'
 
@@ -98,29 +109,7 @@
             table.ajax.reload(null, false); // user paging is not reset on reload
         }, 2000);
 
-        function check_new_search_values(new_search_values, prev_search_value) {
-            const wheres = prev_search_value.trim().split(" ");
-            for (let where of wheres) {
-                //기존거에 있으면 패스
-                let isThere = false;
-                for (let value of new_search_values) {
-                    if (value === where) {
-                        isThere = true;
-                    }
-                }
-                //루프상 없으면 추가
-                if (!isThere) {
-                    new_search_values.push(where);
-                }
-            }
-            new_search_value = new_search_values.join(" ").trim();
-            console.log(new_search_value);
 
-            $('#mySearchText').val(new_search_value);
-            table.search(new_search_value).draw();
-            //table.search(new_search_value).draw();
-            //$("input[type='search']").val(new_search_value);
-        }
         $(".bt-search-clear").click(function () {
             $('#mySearchText').val('');
             table.search('').draw();
@@ -164,6 +153,34 @@
         });
 
     });
+    function check_new_search_values(new_search_values, prev_search_value) {
+        const wheres = prev_search_value.trim().split(" ");
+        for (let where of wheres) {
+            //기존거에 있으면 패스
+            let isThere = false;
+            for (let value of new_search_values) {
+                if (value === where) {
+                    isThere = true;
+                }
+            }
+            //루프상 없으면 추가
+            if (!isThere) {
+                new_search_values.push(where);
+            }
+        }
+        new_search_value = new_search_values.join(" ").trim();
+
+        $('#mySearchText').val(new_search_value);
+        table.search(new_search_value).draw();
+        //table.search(new_search_value).draw();
+        //$("input[type='search']").val(new_search_value);
+    }
+    function checkNameButton(o) {
+        prev_search_value = '';//$('#mySearchText').val()
+        let new_search_values = [];
+        new_search_values.push(o.trim());
+        check_new_search_values(new_search_values, prev_search_value);
+    }
 </script>
 
 </html>
