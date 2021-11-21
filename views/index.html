@@ -30,6 +30,7 @@
             <div class="col-sm"><button class="col-sm bt-search-hell">헬</button></div>
             <div class="col-sm"><button class="col-sm bt-search-cow">카우</button></div>
             <div class="col-sm"><button class="col-sm bt-search-dia">디아</button></div>
+            <div class="col-sm"><button class="col-sm bt-search-bal">바알</button></div>
             <div class="col-sm">조건은 Or 적용</div>
         </div>
         <div class="row">
@@ -151,7 +152,14 @@
             new_search_values.push('dia');
             check_new_search_values(new_search_values, prev_search_value);
         });
-
+        $(".bt-search-bal").click(function () {
+            prev_search_value = $('#mySearchText').val()
+            let new_search_values = [];
+            new_search_values.push('바알');
+            new_search_values.push('발');
+            new_search_values.push('ba');
+            check_new_search_values(new_search_values, prev_search_value);
+        });
     });
     function check_new_search_values(new_search_values, prev_search_value) {
         const wheres = prev_search_value.trim().split(" ");
