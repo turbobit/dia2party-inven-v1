@@ -56,9 +56,12 @@ app.post('/getAll', async function (req, res) {
     let page = (offset / rows_per_page);// + 1; // == 1
     let skip = page * rows_per_page; // == 10 for the first page, 10 for the second ...
 
-    const [rows] = await conn.execute('select count(*) as cnt from list');
+    let [rows] = await conn.execute('select count(*) as cnt from list');
     totalCnt = rows[0].cnt;
     //console.log("전체 저장된 갯수", totalCnt);
+
+    [rows] = await conn.execute('SELECT MAX(num)+1 AS maxNum from list');
+    let maxNum = (rows[0].maxNum);
 
     if (search_value !== null) {
         let sql_where = [];
@@ -79,9 +82,15 @@ app.post('/getAll', async function (req, res) {
         //console.log(sql_value);
         sql_value.push(skip);
         sql_value.push(rows_per_page);
+
+        //검색이 있을때만 sql_where 추가
+        //console.log (sql_where.length );
         const sql = `
             select * from list 
-            where ${sql_where.join(" or ")}
+            where 
+                    num > ${ (maxNum-500) }
+                and 
+                    ${sql_where.join(" or ")}
             order by num desc limit ?,?        
         `;
         //console.log(sql);
@@ -107,7 +116,12 @@ app.post('/getAll', async function (req, res) {
 
     } else {
 
-        const [docs, fields] = await conn.execute(`select * from list order by num desc limit ?,?`, [skip, rows_per_page]);
+        const [docs, fields] = await conn.execute(`select * 
+            from list 
+                where 
+                    num > ${ (maxNum-1000) }
+                order 
+                    by num desc limit ?,?`, [skip, rows_per_page]);
         //console.log(docs.length);
         if (docs !== null) {
             ret = {
